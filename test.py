@@ -2,11 +2,13 @@ import torch
 
 from nets import lightning_unet as unet
 
-if __name__ == "__main__":
-    net = unet.LightningUNet().cuda()
+device = torch.device("cuda")
 
-    ch, H, W = 1, 1024, 1024
-    x = torch.randn(1, ch, H, W).cuda()
+if __name__ == "__main__":
+    net = unet.LightningUNet().to(device)
+
+    ch, H, W = 1, 512, 512
+    x = torch.randn(1, ch, H, W).to(device)
 
     # print(x)
     # print(x.shape)

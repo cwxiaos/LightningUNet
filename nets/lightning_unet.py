@@ -7,11 +7,12 @@ from nets.blocks import UNet
 class LightningUNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.unet = UNet(image_size=1024,
-                         patch_size=4,
+        self.unet = UNet(image_size=512,
+                         patch_size=1,
                          in_channels=3,
                          embed_dim=32,
                          dropout=0.0,
+                         num_classes=14,
                          ape=False)
 
     def forward(self, x):
