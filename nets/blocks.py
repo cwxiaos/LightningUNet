@@ -34,6 +34,7 @@ class LightningAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x):
+        return x
         b, l, c = x.shape
         qkv = self.qkv(x).reshape(b, l, 3, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
         print(qkv.shape)
@@ -319,7 +320,6 @@ class PatchEmbedding(nn.Module):
         else:
             self.norm = None
 
-    # ([1, 3, 224, 224]) -> ([1, 3136, 96])
     def forward(self, x):
         B, C, H, W = x.shape
         # TODO look at relaxing size constraints
@@ -466,7 +466,7 @@ class UNet(nn.Module):
     def forward(self, x):
         # print(f"___ [D] x.shape input: {x.shape}")  # 1, C, H, W
         x = self.patch_embedding(x)
-        # print(f"___ [D] x.shape after patch_embedding: {x.shape}")  # 1, H * W, D
+        print(f"___ [D] x.shape after patch_embedding: {x.shape}")  # 1, H * W, D
 
         if self.ape:
             x += self.absolute_position_embedding

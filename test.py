@@ -2,7 +2,7 @@ import torch
 
 from nets import lightning_unet as unet
 
-device = torch.device("cuda")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   # For Test Only, Lightning Attn requires cuda
 
 if __name__ == "__main__":
     net = unet.LightningUNet().to(device)
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # print(x)
     # print(x.shape)
 
-    # print(net)
+    print(net)
 
     # print(net(x))
     print(net(x).shape)

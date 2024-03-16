@@ -1,8 +1,42 @@
+# 网络结构
+
+由于Lightning Attn的限制, 网络只能做到三层, dim从32 -> 64 -> 128 -> 64 -> 32
+如果需要更多层数, 在128之后增加Conv层处理到192
+
+```
+Image ([1, 1, H, W])    // 原始图像
+Image ([1, 3, H, W])    // 如果是黑白图像则repeat为三通道图像
+
+Image ([1, C, 512, 512])    // Zoom
+// 预处理完成
+
+PtachEmbedding ([1, H * W, 32]) // 卷积到32, 由于Lightning Attn的参数需要为2的幂且>=32
+                                // 同时如果Dim过大(>=192), 会导致Out Of Memory(需要13G, torch限制10G)
+
+// 下采样
+
+TransformerBlock(Lightning Attn())  // ([1, H * W, 32]) -> ([1, H * W, 32])
+PatchMerging()                      // ([1, H * W, 32]) -> ([1, H / 2 * W / 2, 64])
+TransformerBlock(Lightning Attn())  // ([1, H / 2 * W / 2, 64]) -> ([1, H / 2 * W / 2, 64])
+PatchMerging()                      // ([1, H / 2 * W / 2, 64]) -> ([1, H / 4 * W / 4, 128])
+
+TransformerBlock(Lightning Attn())  // ([1, H / 4 * W / 4, 128]) -> ([1, H / 4 * W / 4, 128])
+
+// 上采样
+
+PatchExpanding()                    // ([1, H / 4 * W / 4, 128]) -> ([1, H / 2 * W / 2, 64])
+TransformerBlock(Lightning Attn())  // ([1, H / 2 * W / 2, 64]) -> ([1, H / 2 * W / 2, 64])
+PatchExpanding()                    // ([1, H / 2 * W / 2, 64]) -> ([1, H * W, 32])
+TransformerBlock(Lightning Attn())  // ([1, H * W, 32]) -> ([1, H * W, 32])
+
+// Projection
+
+Image ([1, 14, 512, 512])           // 14为数据集分类数
+```
+
 # PatchEmbedding
 
-由于Lightning Attn可以处理超长序列, 对输入图像直接做flatten, 用Transformer直接感知全局Context
-
-其中patch_size参数为预留参数, 方便后期修改PatchEmbedding的实现方式
+使用Swin Transformer的PatchEmbedding 
 
 flatten: image([1, Channels, H, W]) &rarr; ([1, Channels, H * W])
 
@@ -10,6 +44,9 @@ transpose: ([1, Channels, H * W]) &rarr; ([1, H * W, Channels])
 
 [https://blog.csdn.net/lzzzzzzm/article/details/122902777](https://blog.csdn.net/lzzzzzzm/article/details/122902777)
 
+# PatchExpanding
+
+使用Swin Transformer的PatchExpanding
 
 # Lightning Attention
 
