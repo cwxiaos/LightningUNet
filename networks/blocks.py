@@ -56,7 +56,7 @@ class LightningAttention(nn.Module):
 
         assert l == self.input_resolution[0] * self.input_resolution[1], "input feature has wrong size"
 
-        # x += self.relative_position_bias_table
+        x += self.relative_position_bias_table
         qkv = self.qkv(x).reshape(b, l, 3, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
         # print(qkv.shape)
         q, k, v = qkv[0], qkv[1], qkv[2]

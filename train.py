@@ -60,8 +60,7 @@ if __name__ == "__main__":
                           in_channels=config_in_channels,
                           embed_dim=config_embed_dim,
                           ape=config_ape,
-                          num_classes=config_num_classes
-                          ).to(device)
+                          num_classes=config_num_classes).to(device)
 
     # print(model)
     if args.pretrained is not None:
@@ -95,7 +94,7 @@ if __name__ == "__main__":
 
     for epoch in range(args.epochs):
         progress_bar = tqdm(train_dataloader,
-                            desc=f"Epoch: {epoch}/{args.epochs}",
+                            desc=f"Epoch: {epoch + 1}/{args.epochs}",
                             ncols=170)
         for i, sample in enumerate(progress_bar):
             image, label = sample['image'], sample['label']

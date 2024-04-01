@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ## Download Pretrained Model
 
-Download model from [][]
+Download model from [Pretrained Model](https://drive.google.com/drive/folders/1ASdoCX8A-SW0Tbnl2w9GP8th55O77MaB)
 
 ## Train
 
