@@ -60,6 +60,7 @@ class BaseDataset(Dataset):
 
         # data = data.transpose(2, 0, 1)
         # label = label.transpose(2, 0, 1)
+        print(data.shape, label.shape)
         if self.train:
             if random.random() > 0.5:
                 data, label = random_rot_flip(data, label)

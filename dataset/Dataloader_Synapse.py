@@ -26,56 +26,40 @@ def random_rotate(image, label):
     return image, label
 
 
-class RandomGenerator(object):
-    def __init__(self, output_size):
-        self.output_size = output_size
-
-    def __call__(self, sample):
-        image, label = sample['image'], sample['label']
-
-        if random.random() > 0.5:
-            image, label = random_rot_flip(image, label)
-        elif random.random() > 0.5:
-            image, label = random_rotate(image, label)
-        x, y = image.shape
-        if x != self.output_size[0] or y != self.output_size[1]:
-            image = zoom(image, (self.output_size[0] / x, self.output_size[1] / y), order=3)  # why not 3?
-            label = zoom(label, (self.output_size[0] / x, self.output_size[1] / y), order=0)
-        image = torch.from_numpy(image.astype(np.float32)).unsqueeze(0)
-        label = torch.from_numpy(label.astype(np.float32))
-        sample = {'image': image, 'label': label.long()}
-        return sample
-
-
 class BaseDataset(Dataset):
-    def __init__(self, base_dir, list_dir, split, transform=RandomGenerator):
-        self.transform = transform  # using transform in torch!
-        self.split = split
-        self.sample_list = open(os.path.join(list_dir, self.split+'.txt')).readlines()
-        # print(f"[I] ___ Dataloader Sample List File {os.path.join(list_dir, self.split+'.txt')}")
-        # print(f"[I] ___ Dataloader Sample List {self.sample_list}")
-        self.data_dir = base_dir
+    def __init__(self, root, train=True):
+        self.train = train
+        self.root = root
+
+        self.list = os.path.join(self.root, "train.txt")
+        self.root = os.path.join(self.root, 'train_npz')
+
+        self.sample_list = open(self.list).readlines()
 
     def __len__(self):
         return len(self.sample_list)
 
     def __getitem__(self, idx):
-        if self.split == "train":
+        if self.train:
             slice_name = self.sample_list[idx].strip('\n')
-            data_path = os.path.join(self.data_dir, slice_name+'.npz')
+            data_path = os.path.join(self.root, slice_name+'.npz')
             data = np.load(data_path)
+
             image, label = data['image'], data['label']
+            image = np.expand_dims(image, 2)
+            label = np.expand_dims(label, 2)
+
+            # print(image.shape, label.shape)
+
+            if random.random() > 0.5:
+                image, label = random_rot_flip(image, label)
+            elif random.random() > 0.5:
+                image, label = random_rotate(image, label)
+
         else:
-        # Train -----------------------------------
-            vol_name = self.sample_list[idx].strip('\n')
-            filepath = self.data_dir + "/{}.npy.h5".format(vol_name)
-            data = h5py.File(filepath)
-            image, label = data['image'][:], data['label'][:]
+            pass
 
         sample = {'image': image, 'label': label}
-
-        # Train Only
-        if self.transform:
-            sample = self.transform(sample)
         sample['case_name'] = self.sample_list[idx].strip('\n')
+
         return sample

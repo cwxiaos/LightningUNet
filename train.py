@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.Dataloader import BaseDataset
+from dataset.Dataloader_Synapse import BaseDataset
 from networks.lightning_unet import LightningUnet
 from utils import DiceLoss
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     writer = SummaryWriter(args.log_dir)
 
-    train_dataset = BaseDataset(args.dataset, train=True)
+    train_dataset = BaseDataset(root=args.dataset, train=True)
     # val_dataset = BaseDataset(args.dataset, train=False)
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     model.train()
 
     ce_loss = CrossEntropyLoss()
-    dice_loss = DiceLoss(14)
+    dice_loss = DiceLoss(config_num_classes)
 
     optimizer = optim.SGD(model.parameters(),
                           lr=args.base_lr,
