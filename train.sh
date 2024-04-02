@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python train.py --cfg configs/s.yml --dataset ../Data701 --epochs 50 --output model --base_lr 0.05 --batch_size 48 --log_dir /root/tf-logs
+python train.py --cfg configs/m.yml --dataset ../Data701 --epochs 50 --output ../model_512 --base_lr 0.1 --batch_size 12 --log_dir ../logs_512
 
 # python train.py --cfg configs/m.yml --dataset ../Data701 --epochs 20 --output model --base_lr 0.05 --batch_size 12 --log_dir /root/tf-logs
 

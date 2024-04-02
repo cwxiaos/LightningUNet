@@ -31,7 +31,7 @@ torch.cuda.empty_cache()
 
 
 def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, label=None):
-    net = LightningUnet(num_classes=num_classes, ape=True).to(device)
+    net = LightningUnet(num_classes=num_classes, ape=True, img_size=img_size).to(device)
     net.eval()
 
     msg = net.load_state_dict(torch.load(model))
@@ -75,17 +75,18 @@ def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, l
         # print(slice_image.shape)
 
         with torch.no_grad():
-            if h != img_size or w != img_size:
-                slice_image = interpolate(slice_image, size=(img_size, img_size), mode='bilinear', align_corners=True)
+            # if h != img_size or w != img_size:
+            #     slice_image = interpolate(slice_image, size=(img_size, img_size), mode='bilinear', align_corners=True)
             output = net(slice_image)
 
             out = torch.argmax(torch.softmax(output, dim=1), dim=1)
             # print(out.shape)
 
-            if h != img_size or w != img_size:
-                out = out.unsqueeze(0)
-                out = interpolate(out, size=(h, w), mode='bilinear', align_corners=True)
-                out = out.squeeze(0)
+            # if h != img_size or w != img_size:
+            #     out = out.unsqueeze(0)
+            #     out = interpolate(out, size=(h, w), mode='bilinear', align_corners=True)
+            #     out = out.squeeze(0)
+
             # nibabel
             # out = out.permute(1, 2, 0)
             out = out.cpu().detach().numpy()

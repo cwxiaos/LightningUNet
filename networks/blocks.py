@@ -26,6 +26,16 @@ class Mlp(nn.Module):
         # Keep Unchange
         return x
 
+class RMSNorm(nn.Module):
+    def __init__(self, heads, dim):
+        super().__init__()
+        self.scale = dim ** 0.5
+        self.gamma = nn.Parameter(torch.ones(heads, 1, dim) / self.scale)
+
+    def forward(self, x):
+        normed = nn.functional.normalize(x, dim = -1)
+        return normed * self.scale * self.gamma
+
 class LightningAttention(nn.Module):
     def __init__(self,
                  dim,
@@ -44,6 +54,8 @@ class LightningAttention(nn.Module):
         self.slope_tensor = _build_slope_tensor(num_heads).to(torch.float16)
         self.relative_position_bias_table = nn.Parameter(torch.zeros(1, input_resolution[0] * input_resolution[1], dim))
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.q_norm = RMSNorm(num_heads, head_dim)
+        self.k_norm = RMSNorm(num_heads, head_dim)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -66,6 +78,8 @@ class LightningAttention(nn.Module):
         # k = k / k.norm(-1, keepdim=True)
         q = q * self.scale
         # print(q.shape, k.shape, v.shape)
+        q = self.q_norm(q)
+        k = self.k_norm(k)
 
         x = lightning_attn_func(q, k, v, self.slope_tensor.to(x.device))
 
@@ -177,12 +191,6 @@ class PatchMerging(nn.Module):
 
     def extra_repr(self) -> str:
         return f"input_resolution={self.input_resolution}, dim={self.dim}"
-
-    def flops(self):
-        H, W = self.input_resolution
-        flops = H * W * self.dim
-        flops += (H // 2) * (W // 2) * 4 * self.dim * 2 * self.dim
-        return flops
 
 class PatchExpanding(nn.Module):
     def __init__(self, input_resolution, dim, dim_scale=2, norm_layer=nn.LayerNorm):
