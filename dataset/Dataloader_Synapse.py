@@ -34,6 +34,8 @@ class BaseDataset(Dataset):
         self.list = os.path.join(self.root, "train.txt")
         self.root = os.path.join(self.root, 'train_npz')
 
+        self.output_size = [224, 224]
+
         self.sample_list = open(self.list).readlines()
 
     def __len__(self):
@@ -46,8 +48,8 @@ class BaseDataset(Dataset):
             data = np.load(data_path)
 
             image, label = data['image'], data['label']
-            image = np.expand_dims(image, 2)
-            label = np.expand_dims(label, 2)
+            # image = np.expand_dims(image, 2)
+            # label = np.expand_dims(label, 2)
 
             # print(image.shape, label.shape)
 
@@ -55,6 +57,13 @@ class BaseDataset(Dataset):
                 image, label = random_rot_flip(image, label)
             elif random.random() > 0.5:
                 image, label = random_rotate(image, label)
+
+            x, y = image.shape
+            image = zoom(image, (self.output_size[0] / x, self.output_size[1] / y), order=3)
+            label = zoom(label, (self.output_size[0] / x, self.output_size[1] / y), order=0)
+
+            image = np.expand_dims(image, 2)
+            label = np.expand_dims(label, 2)
 
         else:
             pass

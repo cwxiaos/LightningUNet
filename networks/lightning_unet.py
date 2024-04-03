@@ -22,7 +22,7 @@ class LightningUnet(nn.Module):
                          in_chans=in_channels,
                          num_classes=num_classes,
                          embed_dim=embed_dim,
-                         depths=[2, 2, 2, 2],
+                         depths=[4, 2, 2, 4],
                          num_heads=[3, 6, 12, 24],
                          mlp_ratio=4,
                          qkv_bias=True,
@@ -48,7 +48,7 @@ class LightningUnet(nn.Module):
         if x.shape[1] == 1:
             x = x.repeat(1, 3, 1, 1)
 
-        x = self.normalize(x)
+        # x = self.normalize(x)
 
         # print(x.shape)
         x = self.unet(x)

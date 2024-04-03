@@ -4,6 +4,7 @@ import random
 import nibabel as nib
 import numpy as np
 from scipy import ndimage
+from scipy.ndimage.interpolation import zoom
 from torch.utils.data import Dataset
 
 def random_rot_flip(image, label):
@@ -27,6 +28,7 @@ class BaseDataset(Dataset):
     def __init__(self, root, train=True):
         self.root = root
         self.train = train
+        self.output_size = [224, 224]
 
         if train == True:
             self.dir_data = os.path.join(root, 'imagesTr')
@@ -60,12 +62,20 @@ class BaseDataset(Dataset):
 
         # data = data.transpose(2, 0, 1)
         # label = label.transpose(2, 0, 1)
-        print(data.shape, label.shape)
+        # print(data.shape, label.shape)
         if self.train:
-            if random.random() > 0.5:
+            if random.random() > 0.3:
                 data, label = random_rot_flip(data, label)
-            elif random.random() > 0.5:
+            elif random.random() > 0.3:
                 data, label = random_rotate(data, label)
+
+        x, y, s = data.shape
+        data = zoom(data[:, :, 0], (self.output_size[0] / x, self.output_size[1] / y), order=3)
+        label = zoom(label[:, :, 0], (self.output_size[0] / x, self.output_size[1] / y), order=0)
+
+        data = np.expand_dims(data, axis=2)
+        label = np.expand_dims(label, axis=2)
+
         sample = {'image': data, 'label': label}
 
         # print(sample['image'].shape)

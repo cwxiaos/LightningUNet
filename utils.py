@@ -39,3 +39,29 @@ class DiceLoss(nn.Module):
             class_wise_dice.append(1.0 - dice.item())
             loss += dice * weight[i]
         return loss / self.n_classes
+
+import torch
+from einops import rearrange, einsum
+
+class TverskyLoss(nn.Module):
+    def __init__(self, alpha=0.5, beta=0.5, smooth=1.):
+        super(TverskyLoss, self).__init__()
+        self.smooth = smooth
+        self.alpha = alpha
+        self.beta = beta
+
+    def forward(self, result, gt):
+        result = rearrange(result, 'b c h w -> b c (h w)')
+        result = torch.softmax(result, dim=1)
+        gt = rearrange(gt, 'b h w -> b 1 (h w)')
+
+        y_onehot = torch.zeros_like(result)
+        y_onehot = y_onehot.scatter_(1, gt.to(torch.int64), 1)
+
+        intersection = einsum(result, y_onehot, "b c n, b c n -> b c")
+        FP = einsum(result, 1-y_onehot, "b c n, b c n -> b c")
+        FN = einsum(1-result, y_onehot, "b c n, b c n -> b c")
+        denominator = intersection + self.alpha * FP + self.beta * FN
+        divided = 1 - einsum(intersection, "b c -> b") / einsum(denominator, "b c -> b").clamp(min=self.smooth)
+
+        return divided.mean()

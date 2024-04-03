@@ -1,0 +1,1 @@
+python test_net.py --cfg configs/s.yml

@@ -26,16 +26,6 @@ class Mlp(nn.Module):
         # Keep Unchange
         return x
 
-class RMSNorm(nn.Module):
-    def __init__(self, heads, dim):
-        super().__init__()
-        self.scale = dim ** 0.5
-        self.gamma = nn.Parameter(torch.ones(heads, 1, dim) / self.scale)
-
-    def forward(self, x):
-        normed = nn.functional.normalize(x, dim = -1)
-        return normed * self.scale * self.gamma
-
 class LightningAttention(nn.Module):
     def __init__(self,
                  dim,
@@ -51,11 +41,9 @@ class LightningAttention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
-        self.slope_tensor = _build_slope_tensor(num_heads).to(torch.float16)
+        self.slope_tensor = _build_slope_tensor(num_heads).to(torch.float16).to('cuda')
         self.relative_position_bias_table = nn.Parameter(torch.zeros(1, input_resolution[0] * input_resolution[1], dim))
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.q_norm = RMSNorm(num_heads, head_dim)
-        self.k_norm = RMSNorm(num_heads, head_dim)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -68,22 +56,20 @@ class LightningAttention(nn.Module):
 
         assert l == self.input_resolution[0] * self.input_resolution[1], "input feature has wrong size"
 
-        x += self.relative_position_bias_table
+        # x += self.relative_position_bias_table
         qkv = self.qkv(x).reshape(b, l, 3, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
-        # print(qkv.shape)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # This is a try to limit the value of qk, however, which will lead to gradient explosion
         # q = q / q.norm(-1, keepdim=True)
         # k = k / k.norm(-1, keepdim=True)
+
         q = q * self.scale
-        # print(q.shape, k.shape, v.shape)
-        q = self.q_norm(q)
-        k = self.k_norm(k)
+        q, k = self.attn_drop(q), self.attn_drop(k)
 
-        x = lightning_attn_func(q, k, v, self.slope_tensor.to(x.device))
+        x = lightning_attn_func(q, k, v, self.slope_tensor)
 
-        # x = self.attn_drop(x)
+        x = self.attn_drop(x)
         x = x.reshape(b, l, c)
         x = self.proj(x)
         x = self.proj_drop(x)
@@ -129,10 +115,8 @@ class TransformerBlock(nn.Module):
         )
 
     def forward(self, x):
-        # print(f"___ [D] x.shape: {x.shape}")
         h, w = self.input_resolution
         b, l, c = x.shape
-        # print(f"___ [D] x.shape: {x.shape}")
         assert l == h * w, f"Input feature has wrong size: {l} != ({h}*{w})"
 
         shortcut = x
@@ -486,10 +470,9 @@ class UNet(nn.Module):
         self.output = nn.Conv2d(in_channels=embed_dim,out_channels=self.num_classes,kernel_size=1,bias=False)
 
     def forward(self, x):
-        # print(f"___ [D] x.shape input: {x.shape}")  # 1, C, H, W
         B, C, H ,W = x.shape
         x = self.patch_embed(x)
-        # print(f"___ [D] x.shape after patch_embedding: {x.shape}")  # 1, H * W, D
+        # B, H * W, D
 
         if self.ape:
             x += self.absolute_pos_embed
@@ -497,11 +480,9 @@ class UNet(nn.Module):
 
         x_down_sample = []
         for layer in self.layers:
-            # print(f"_ [D] x Shape: {x.shape}")
             x_down_sample.append(x)
             x = layer(x)
         
-        # print(f"_ [D] Cat Len: {len(x_down_sample)}")
         x = self.norm(x)
 
         # print(f"_______________ Now Up Sampling _______________")
@@ -519,14 +500,9 @@ class UNet(nn.Module):
         # print(x.shape)
         x = self.up(x)
         x = x.view(B, self.patches_resolution[0] * 4, self.patches_resolution[1] * 4, -1)
-        # print(x.shape)
 
         # If Patch Siez is not 4, the View operation will cause error
         # x = x.view(1, self.patch_resolution[0], self.patch_resolution[1], -1)
         x = x.permute(0,3,1,2) # B,C,H,W
-        # print(x.shape)
-
-        # print(f"_ [D] X Shape: {x.shape}")
         x = self.output(x)
-        # print(x.shape)
         return x

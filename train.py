@@ -12,9 +12,9 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.Dataloader_Synapse import BaseDataset
+from dataset.Dataloader import BaseDataset
 from networks.lightning_unet import LightningUnet
-from utils import DiceLoss
+from utils import DiceLoss, TverskyLoss
 
 parser = argparse.ArgumentParser()
 
@@ -37,6 +37,9 @@ torch.cuda.empty_cache()
 if __name__ == "__main__":
     if not os.path.exists(args.output):
         os.mkdir(args.output)
+    
+    if args.batch_size != 24 and args.batch_size % 6 == 0:
+        args.base_lr *= args.batch_size / 24
 
     with open(args.cfg, 'r') as f:
         yaml_cfg = yaml.load(f, Loader=yaml.FullLoader)
@@ -62,6 +65,8 @@ if __name__ == "__main__":
                           ape=config_ape,
                           num_classes=config_num_classes).to(device)
 
+    print(f"Model Params: {sum(p.numel() for p in model.parameters())}")
+
     # print(model)
     if args.pretrained is not None:
         model.load_state_dict(torch.load(args.pretrained))
@@ -81,6 +86,7 @@ if __name__ == "__main__":
 
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(config_num_classes)
+    tversky_loss = TverskyLoss(alpha=0.8, beta=0.2)
 
     optimizer = optim.SGD(model.parameters(),
                           lr=args.base_lr,
@@ -90,25 +96,34 @@ if __name__ == "__main__":
     iter_num = 0
     max_iterations = args.epochs * len(train_dataloader)
 
-    best_loss = 1
+    best_loss = 0.5
 
     for epoch in range(args.epochs):
         progress_bar = tqdm(train_dataloader,
                             desc=f"Epoch: {epoch + 1}/{args.epochs}",
-                            ncols=170)
+                            ncols=190)
         for i, sample in enumerate(progress_bar):
             image, label = sample['image'], sample['label']
             image, label = image.to(device), label.to(device)
             image, label = image.permute(0, 3, 1, 2), label.permute(0, 3, 1, 2)
             label = label[:, 0, :, :]
             image, label = image.to(torch.float32), label.to(torch.float32)
+            # print(image.shape, label.shape)
             # B, 1, H, W    B, H, W
 
             output = model(image)
 
+            # print(output.shape)
+            # B, Class, H, W
+
             loss_ce = ce_loss(output, label.long())
             loss_dice = dice_loss(output, label, softmax=True)
-            loss = 0.4 * loss_ce + 0.6 * loss_dice
+            loss_tversky = tversky_loss(output, label)
+            
+            loss = 0.4 * loss_ce
+            loss += 0.6 * loss_dice
+            # loss += 0.6 * loss_tversky
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -117,25 +132,32 @@ if __name__ == "__main__":
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr_
 
-            progress_bar.set_postfix_str(
-                f"loss: {loss:.4f}, loss_ce: {loss_ce:.4f}, loss_dice: {loss_dice:.4f}, lr: {lr_:.4f}, progress: {iter_num / max_iterations * 100:.2f}%")
+            postfix = f"loss: {loss:.4f}, "
+            postfix += f"loss_ce: {loss_ce:.4f}, "
+            postfix += f"loss_dice: {loss_dice:.4f}, "
+            # postfix += f"loss_tversky: {loss_tversky:.4f}, "
+            postfix += f"lr: {lr_:.4f}, "
+            postfix += f"progress: {iter_num / max_iterations * 100:.2f}%"
+
+            progress_bar.set_postfix_str(postfix)
 
             writer.add_scalar('info/lr', lr_, iter_num)
             writer.add_scalar("info/loss", loss, iter_num)
             writer.add_scalar("info/loss_ce", loss_ce, iter_num)
             writer.add_scalar("info/loss_dice", loss_dice, iter_num)
+            # writer.add_scalar("info/loss_tversky", loss_tversky, iter_num)
 
-            _image = image[1, 0:1, :, :]
+            _image = image[0, 0:1, :, :]
             _image = (_image - _image.min()) / (_image.max() - _image.min())
             writer.add_image('train/Image', _image, iter_num)
             _output = torch.argmax(torch.softmax(output, dim=1), dim=1, keepdim=True)
-            writer.add_image('train/Prediction', _output[1, ...] * 50, iter_num)
-            writer.add_image('train/GroundTruth', label[1, ...].unsqueeze(0) * 50, iter_num)
+            writer.add_image('train/Prediction', _output[0, ...] * 50, iter_num)
+            writer.add_image('train/GroundTruth', label[0, ...].unsqueeze(0) * 50, iter_num)
 
             iter_num += 1
 
-        if loss < best_loss:
+        if loss_dice < best_loss:
             torch.save(model.state_dict(), os.path.join(args.output, f"best.pth"))
-            best_loss = loss
+            best_loss = loss_dice
 
     torch.save(model.state_dict(), os.path.join(args.output, f"unet_{args.epochs}.pth"))
