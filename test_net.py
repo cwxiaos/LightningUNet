@@ -41,4 +41,6 @@ if __name__ == "__main__":
                           ape=config_ape,
                           num_classes=config_num_classes).to(device)
 
+    print(model)
+
     print(f"Model Params: {sum(p.numel() for p in model.parameters())}")

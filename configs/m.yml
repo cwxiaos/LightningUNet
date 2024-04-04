@@ -8,9 +8,10 @@ model:
 train:
   seed: 0
   # TODO
+  optim: Adam
   warmup: 20
   warmup_lr: 1e-6
   max_epoch: 200
   max_grad_norm: 10
-  weight_decay: 0.01
+  weight_decay: 0.0002
   lr: 0.0001

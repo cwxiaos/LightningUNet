@@ -22,8 +22,9 @@ class LightningUnet(nn.Module):
                          in_chans=in_channels,
                          num_classes=num_classes,
                          embed_dim=embed_dim,
-                         depths=[4, 2, 2, 4],
+                         depths=[2, 2, 4, 2],
                          num_heads=[3, 6, 12, 24],
+                         kernel_size=[21, 15, 9, 5],
                          mlp_ratio=4,
                          qkv_bias=True,
                          qk_scale=None,
@@ -31,17 +32,16 @@ class LightningUnet(nn.Module):
                          drop_path_rate=0.1,
                          norm_layer=nn.LayerNorm,
                          ape=ape)
+        # self.unet = UNet()
+
         # self.norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         # self.normalize = transforms.Compose([transforms.ToTensor(), self.norm])
         self.normalize = normalize
 
     def forward(self, x):
-        # print(f"x shape: {x.shape}")
         b, c, h, w = x.shape
         if h != self.image_size or w != self.image_size:
             x = interpolate(x, size=(self.image_size, self.image_size), mode='bilinear', align_corners=True)
-            
-        # print(f"x shape: {x.shape}")
 
         # For RGB images, the shape of x is (B, C, H, W)
         # For grayscale images, the shape of x is (B, 1, H, W)， So repeat 3 times
@@ -50,7 +50,6 @@ class LightningUnet(nn.Module):
 
         # x = self.normalize(x)
 
-        # print(x.shape)
         x = self.unet(x)
 
         if h != x.shape[2] or w != x.shape[3]:

@@ -30,8 +30,8 @@ device = torch.device("cuda")
 torch.cuda.empty_cache()
 
 
-def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, label=None):
-    net = LightningUnet(num_classes=num_classes, ape=True, img_size=img_size).to(device)
+def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, patch_size=4, label=None):
+    net = LightningUnet(num_classes=num_classes, ape=True, img_size=img_size, patch_size=patch_size).to(device)
     net.eval()
 
     msg = net.load_state_dict(torch.load(model))
@@ -135,4 +135,5 @@ if __name__ == "__main__":
               num_classes=config_num_classes,
               img_size=config_img_size,
               batch=args.batch,
-              label=args.label)
+              label=args.label,
+              patch_size=config_patch_size)

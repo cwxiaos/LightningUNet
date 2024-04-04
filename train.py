@@ -6,13 +6,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import yaml
 from torch.nn.modules.loss import CrossEntropyLoss
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.Dataloader import BaseDataset
+from dataset.Dataloader_Synapse import BaseDataset
 from networks.lightning_unet import LightningUnet
 from utils import DiceLoss, TverskyLoss
 
@@ -52,6 +53,7 @@ if __name__ == "__main__":
         config_num_classes = yaml_cfg['model']['num_classes']
 
         config_seed = yaml_cfg['train']['seed']
+        config_weight_decay = yaml_cfg['train']['weight_decay']
 
     random.seed(config_seed)
     np.random.seed(config_seed)
@@ -91,11 +93,16 @@ if __name__ == "__main__":
     optimizer = optim.SGD(model.parameters(),
                           lr=args.base_lr,
                           momentum=0.9,
-                          weight_decay=0.0001)
+                          weight_decay=config_weight_decay)
+    # optimizer = optim.Adam(model.parameters(),
+    #                        lr=args.base_lr,
+    #                        weight_decay=0.0001)
 
-    iter_num = 0
     max_iterations = args.epochs * len(train_dataloader)
 
+    scheduler = CosineAnnealingLR(optimizer, T_max=int(max_iterations * 1.2))
+
+    iter_num = 0
     best_loss = 0.5
 
     for epoch in range(args.epochs):
@@ -128,9 +135,11 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
-            lr_ = args.base_lr * (1.0 - iter_num / max_iterations) ** 0.9
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr_
+            # lr_ = args.base_lr * (1.0 - iter_num / max_iterations) ** 0.9
+            # for param_group in optimizer.param_groups:
+            #     param_group['lr'] = lr_
+            lr_ = optimizer.param_groups[0]['lr']
+            scheduler.step()
 
             postfix = f"loss: {loss:.4f}, "
             postfix += f"loss_ce: {loss_ce:.4f}, "
@@ -156,8 +165,9 @@ if __name__ == "__main__":
 
             iter_num += 1
 
-        if loss_dice < best_loss:
+        if loss < best_loss:
             torch.save(model.state_dict(), os.path.join(args.output, f"best.pth"))
-            best_loss = loss_dice
+            best_loss = loss
+        torch.save(model.state_dict(), os.path.join(args.output, f"test.pth"))
 
     torch.save(model.state_dict(), os.path.join(args.output, f"unet_{args.epochs}.pth"))

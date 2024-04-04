@@ -3,12 +3,11 @@
 # CPU Intel Xeon Gold 6430, RAM 240GB, GPU RTX4090 x 2, Ubuntu 20.04, CUDA 11.3, torch 1.11
 
 # 这组参数导致过拟合, Those parameters lead to overfit
-# batch取太大会陷入局部最小值, batch取太小会抖动厉害.
+# batch取太大会陷入局部最小值, batch取太小会抖动厉害?
 # python train.py --cfg configs/s.yml --dataset ../data --epochs 60 --output ../model --base_lr 0.2 --batch_size 48 --log_dir /root/tf-logs --n_gpu 2
 
 # CPU Intel Xeon Gold 6430, RAM 120GB, GPU RTX4090 x 1, Ubuntu 20.04, CUDA 11.3, torch 1.11
-# 先24 Batch收敛到0.15左右, 然后降Batch训练, 如果24 Batch训练到底会过拟合
-python train.py --cfg configs/s.yml --dataset ../Dataset --epochs 100 --output ../model --base_lr 0.05 --batch_size 24 --log_dir /root/tf-logs
+python train.py --cfg configs/s.yml --dataset ../data --epochs 45 --output ../model --base_lr 0.05 --batch_size 6 --log_dir /root/tf-logs
 # python train.py --cfg configs/s.yml --dataset ../Dataset --epochs 15 --output ../model --base_lr 0.03 --batch_size 12 --log_dir /root/tf-logs --pretrained ../models/best_1.pth
 # python train.py --cfg configs/s.yml --dataset ../Dataset --epochs 15 --output ../model --base_lr 0.01 --batch_size 6 --log_dir /root/tf-logs --pretrained ../models/best_2.pth
 
