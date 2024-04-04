@@ -6,38 +6,18 @@ from lightning_attn.ops import lightning_attn_func
 from lightning_attn.utils import _build_slope_tensor
 from timm.models.layers import DropPath, trunc_normal_
 
-import math
-
-
-class DWConv(nn.Module):
-    def __init__(self, dim=768):
-        super(DWConv, self).__init__()
-        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
-
-    def forward(self, x, H, W):
-        B, N, C = x.shape
-        x = x.transpose(1, 2).view(B, C, H, W)
-        x = self.dwconv(x)
-        x = x.flatten(2).transpose(1, 2)
-
-        return x
-
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.fc1 = nn.Linear(in_features, hidden_features)
-        self.dwconv = DWConv(hidden_features)
         self.act = act_layer()
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
-        self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x, H, W):
+    def forward(self, x):
         x = self.fc1(x)
-        x = self.relu(x)
-        x = self.dwconv(x, H, W)
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
@@ -148,7 +128,7 @@ class TransformerBlock(nn.Module):
 
         shortcut = x
         x = self.norm2(x)
-        x = self.mlp(x, h, w)
+        x = self.mlp(x)
         x = self.drop_path(x)
         x = x + shortcut
 
@@ -261,7 +241,8 @@ class LayerDownSample(nn.Module):
                  drop_path=0.,
                  norm_layer=nn.LayerNorm,
                  downsample=None,
-                 use_checkpoint=False):
+                 use_checkpoint=False,
+                 type='L'):
 
         super().__init__()
         self.dim = dim
@@ -311,7 +292,8 @@ class LayerUpSample(nn.Module):
                  drop_path=0.,
                  norm_layer=nn.LayerNorm,
                  upsample=None,
-                 use_checkpoint=False):
+                 use_checkpoint=False,
+                 type='L'):
 
         super().__init__()
         self.dim = dim
@@ -412,7 +394,8 @@ class UNet(nn.Module):
                  drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm,
                  ape=False,
-                 use_checkpoint=False):
+                 use_checkpoint=False,
+                 **kargs):
         super().__init__()
 
         self.num_classes = num_classes
@@ -452,8 +435,10 @@ class UNet(nn.Module):
                                depth=depths[i_layer],
                                num_heads=num_heads[i_layer],
                                mlp_ratio=self.mlp_ratio,
-                               qkv_bias=qkv_bias, qk_scale=qk_scale,
-                               drop=drop_rate, attn_drop=attn_drop_rate,
+                               qkv_bias=qkv_bias,
+                               qk_scale=qk_scale,
+                               drop=drop_rate,
+                               attn_drop=attn_drop_rate,
                                drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
                                norm_layer=norm_layer,
                                downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
@@ -465,18 +450,20 @@ class UNet(nn.Module):
         for i_layer in range(self.num_layers):
             concat_linear = nn.Linear(2*int(embed_dim*2**(self.num_layers-1-i_layer)),
             int(embed_dim*2**(self.num_layers-1-i_layer))) if i_layer > 0 else nn.Identity()
-            if i_layer ==0 :
+            if i_layer == 0:
                 layer_up = PatchExpanding(input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
                 patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))), dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)), dim_scale=2, norm_layer=norm_layer)
             else:
                 layer_up = LayerUpSample(dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)),
                                 input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
-                                                    patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))),
+                                                  patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))),
                                 depth=depths[(self.num_layers - 1 - i_layer)],
                                 num_heads=num_heads[(self.num_layers - 1 - i_layer)],
                                 mlp_ratio=self.mlp_ratio,
-                                qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                drop=drop_rate, attn_drop=attn_drop_rate,
+                                qkv_bias=qkv_bias,
+                                qk_scale=qk_scale,
+                                drop=drop_rate,
+                                attn_drop=attn_drop_rate,
                                 drop_path=dpr[sum(depths[:(self.num_layers-1-i_layer)]):sum(depths[:(self.num_layers-1-i_layer) + 1])],
                                 norm_layer=norm_layer,
                                 upsample=PatchExpanding if (i_layer < self.num_layers - 1) else None,

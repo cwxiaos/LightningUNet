@@ -31,7 +31,7 @@ torch.cuda.empty_cache()
 
 
 def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, patch_size=4, label=None):
-    net = LightningUnet(num_classes=num_classes, ape=True, img_size=img_size, patch_size=patch_size).to(device)
+    net = LightningUnet(num_classes=num_classes, ape=False, img_size=img_size, patch_size=patch_size).to(device)
     net.eval()
 
     msg = net.load_state_dict(torch.load(model))

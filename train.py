@@ -171,3 +171,4 @@ if __name__ == "__main__":
         torch.save(model.state_dict(), os.path.join(args.output, f"test.pth"))
 
     torch.save(model.state_dict(), os.path.join(args.output, f"unet_{args.epochs}.pth"))
+    writer.close()

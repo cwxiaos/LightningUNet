@@ -3,7 +3,7 @@ model:
   patch_size: 4
   in_channels: 3
   embed_dim: 96
-  ape: True
+  ape: False
   num_classes: 9
 train:
   seed: 0
