@@ -6,6 +6,21 @@ from lightning_attn.ops import lightning_attn_func
 from lightning_attn.utils import _build_slope_tensor
 from timm.models.layers import DropPath, trunc_normal_
 
+import math
+
+
+class DWConv(nn.Module):
+    def __init__(self, dim=768):
+        super(DWConv, self).__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
+
+    def forward(self, x, H, W):
+        B, N, C = x.shape
+        x = x.transpose(1, 2).view(B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2)
+
+        return x
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -13,17 +28,20 @@ class Mlp(nn.Module):
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.fc1 = nn.Linear(in_features, hidden_features)
+        self.dwconv = DWConv(hidden_features)
         self.act = act_layer()
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
+        self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x):
+    def forward(self, x, H, W):
         x = self.fc1(x)
+        x = self.relu(x)
+        x = self.dwconv(x, H, W)
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
         x = self.drop(x)
-        # Keep Unchange
         return x
 
 class LightningAttention(nn.Module):
@@ -34,8 +52,7 @@ class LightningAttention(nn.Module):
                  qkv_bias=False,
                  qk_scale=None,
                  attn_drop=0.,
-                 proj_drop=0.,
-                 kernel_size=15):
+                 proj_drop=0.):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -49,8 +66,6 @@ class LightningAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        # self.dwc = nn.Conv2d(in_channels=head_dim, out_channels=head_dim, kernel_size=kernel_size, groups=head_dim, padding=kernel_size // 2)
-
         # nn.init.trunc_normal_(self.position_encode, std=.02)
         trunc_normal_(self.position_encode, std=.02)
 
@@ -63,7 +78,6 @@ class LightningAttention(nn.Module):
         x += self.position_encode
 
         qkv = self.qkv(x)
-        # qkv_ = qkv.reshape(b, l, 3, c).permute(2, 0, 1, 3)
         qkv = qkv.reshape(b, l, 3, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0) # B, H, N, D
 
@@ -73,20 +87,11 @@ class LightningAttention(nn.Module):
 
         q = q * self.scale
 
-        q = self.attn_drop(q)
         k = self.attn_drop(k)
 
         x = lightning_attn_func(q, k, v, self.slope_tensor)
         x = x.reshape(b, l, c)
 
-        # q_, k_, v_ = qkv_.unbind(0)
-        # q_, k_, v_ = (rearrange(x, "b n (h c) -> (b h) n c", h=self.num_heads) for x in [q_, k_, v_])
-        # num = int(v_.shape[1] ** 0.5)
-        # feature_map = rearrange(v_, "b (w h) c -> b c w h", w=num, h=num)
-        # feature_map = rearrange(self.dwc(feature_map), "b c w h -> b (w h) c")
-        # feature_map = rearrange(feature_map, "(b h) n c -> b n (h c)", h=self.num_heads)
-
-        # x = x + feature_map
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -103,8 +108,7 @@ class TransformerBlock(nn.Module):
                  attn_drop=0.,
                  drop_path=0.,
                  act_layer=nn.GELU,
-                 norm_layer=nn.LayerNorm,
-                 kernel_size=5):
+                 norm_layer=nn.LayerNorm):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -118,8 +122,7 @@ class TransformerBlock(nn.Module):
             qkv_bias=qkv_bias,
             qk_scale=qk_scale,
             attn_drop=attn_drop,
-            proj_drop=drop,
-            kernel_size=kernel_size
+            proj_drop=drop
         )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -145,7 +148,7 @@ class TransformerBlock(nn.Module):
 
         shortcut = x
         x = self.norm2(x)
-        x = self.mlp(x)
+        x = self.mlp(x, h, w)
         x = self.drop_path(x)
         x = x + shortcut
 
@@ -258,7 +261,6 @@ class LayerDownSample(nn.Module):
                  drop_path=0.,
                  norm_layer=nn.LayerNorm,
                  downsample=None,
-                 kernel_size=5,
                  use_checkpoint=False):
 
         super().__init__()
@@ -276,8 +278,7 @@ class LayerDownSample(nn.Module):
                              qkv_bias=qkv_bias, qk_scale=qk_scale,
                              drop=drop, attn_drop=attn_drop,
                              drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                             norm_layer=norm_layer,
-                             kernel_size=kernel_size)
+                             norm_layer=norm_layer)
             for i in range(depth)])
 
         # patch merging layer
@@ -310,7 +311,6 @@ class LayerUpSample(nn.Module):
                  drop_path=0.,
                  norm_layer=nn.LayerNorm,
                  upsample=None,
-                 kernel_size=5,
                  use_checkpoint=False):
 
         super().__init__()
@@ -330,8 +330,7 @@ class LayerUpSample(nn.Module):
                              drop=drop, 
                              attn_drop=attn_drop,
                              drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                             norm_layer=norm_layer,
-                             kernel_size=kernel_size)
+                             norm_layer=norm_layer)
             for i in range(depth)])
 
         # patch merging layer
@@ -405,7 +404,6 @@ class UNet(nn.Module):
                  embed_dim=96,
                  depths=[2, 2, 2, 2],
                  num_heads=[3, 6, 12, 24],
-                 kernel_size=[21, 15, 7, 5],
                  mlp_ratio=4.,
                  qkv_bias=True,
                  qk_scale=None,
@@ -453,7 +451,6 @@ class UNet(nn.Module):
                                                  patches_resolution[1] // (2 ** i_layer)),
                                depth=depths[i_layer],
                                num_heads=num_heads[i_layer],
-                               kernel_size=kernel_size[i_layer],
                                mlp_ratio=self.mlp_ratio,
                                qkv_bias=qkv_bias, qk_scale=qk_scale,
                                drop=drop_rate, attn_drop=attn_drop_rate,
@@ -477,7 +474,6 @@ class UNet(nn.Module):
                                                     patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))),
                                 depth=depths[(self.num_layers - 1 - i_layer)],
                                 num_heads=num_heads[(self.num_layers - 1 - i_layer)],
-                                kernel_size=kernel_size[(self.num_layers - 1 - i_layer)],
                                 mlp_ratio=self.mlp_ratio,
                                 qkv_bias=qkv_bias, qk_scale=qk_scale,
                                 drop=drop_rate, attn_drop=attn_drop_rate,
@@ -523,12 +519,12 @@ class UNet(nn.Module):
         # print(f"_______________ Now Proj to num_classes _______________")
 
         # print(x.shape)
-        # x = self.up(x)
+        x = self.up(x)
 
         # If Patch Siez is not 4, the View operation will cause error
-        # x = x.view(B, self.patches_resolution[0] * 4, self.patches_resolution[1] * 4, -1)
+        x = x.view(B, self.patches_resolution[0] * 4, self.patches_resolution[1] * 4, -1)
 
-        x = x.view(B, self.patches_resolution[0], self.patches_resolution[1], -1)
+        # x = x.view(B, self.patches_resolution[0], self.patches_resolution[1], -1)
 
         x = x.permute(0,3,1,2) # B,C,H,W
         x = self.output(x)

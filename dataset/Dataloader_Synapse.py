@@ -53,9 +53,9 @@ class BaseDataset(Dataset):
 
             # print(image.shape, label.shape)
 
-            if random.random() > 0.5:
+            if random.random() > 0.2:
                 image, label = random_rot_flip(image, label)
-            elif random.random() > 0.5:
+            elif random.random() > 0.2:
                 image, label = random_rotate(image, label)
 
             x, y = image.shape
