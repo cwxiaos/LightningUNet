@@ -1,6 +1,6 @@
 import argparse
 import os
-from time import sleep
+import time
 
 import SimpleITK as sitk
 import h5py
@@ -59,6 +59,8 @@ def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, p
 
     print(f"File {file} shape: {s}, {h}, {w}")
 
+    time_start = time.time()
+
     for i_slice in trange(0, s, batch, ncols=140):
         if s - i_slice < batch:
             batch_range = range(i_slice, s)
@@ -93,6 +95,10 @@ def inference(file, dir_output, model, num_classes=14, img_size=512, batch=12, p
             # print(out.shape)
 
             prediction[batch_range, :, :] = out
+
+    time_end = time.time()
+
+    print(time_end - time_start)
 
     # print(prediction.shape)
     if label is not None:

@@ -1,5 +1,6 @@
 import argparse
 import random
+import time
 
 import numpy as np
 import torch
@@ -41,6 +42,14 @@ if __name__ == "__main__":
                           ape=config_ape,
                           num_classes=config_num_classes).to(device)
 
-    print(model)
+    # print(model)
 
     print(f"Model Params: {sum(p.numel() for p in model.parameters())}")
+
+    img = torch.randn([3, 1, config_img_size, config_img_size]).to(device)
+
+    time_start = time.time()
+    out = model(img)
+    time_end = time.time()
+
+    print(time_end - time_start)
